@@ -1,0 +1,119 @@
+"""
+调参
+用来衡量模型在未知数据上的准确率是指标，叫做泛化误差
+调参顺序（仅做参考）：n_estimators max_depth min_samples_leaf min_samples_split max_feature criterion
+"""
+
+"""
+# 泛化误差是U型曲线 
+
+调参案例
+1、确定n_estimators大致范围    完成后消除
+2、细化范围                    得到n_estimators 完成后消除
+3、网格搜索                    对参数进行一个一个的调整，先大范围，再细化范围
+           顺序：1、max_depth  2、min_samples_leaf  3、min_samples_split  4、max_feature  5、criterion
+           执行完后消除
+4、若调整 max_depth 后，得分下降了，就只能调整 max_feature，同时意味着第二步的得分可能就是上限
+          否则调整 min_samples_leaf 或 min_samples_split
+          执行完后消除
+5、若调整 max_feature 得分仍下降，那么，就没有调整的必要了
+
+其他调整方式展示
+【1】min_samples_leaf
+"""
+
+from sklearn.datasets import load_breast_cancer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV        #网格搜索
+from sklearn.model_selection import cross_val_score
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('TKAgg')
+import pandas as pd
+import numpy as np
+
+data = load_breast_cancer()
+# print(data.data.shape)
+# print(data.target)
+
+rfc = RandomForestClassifier(n_estimators=100, random_state=90)
+score_pre = cross_val_score(rfc, data.data, data.target, cv=10).mean()
+# print(score_pre)
+
+# 第一步
+"""
+score_n_estimators = []
+for i in range(0, 200, 10):
+    rfc = RandomForestClassifier(
+        n_estimators=i+1,
+        n_jobs=-1,
+        random_state=90,
+    )
+    score = cross_val_score(rfc, data.data, data.target, cv=10).mean()
+    score_n_estimators.append(score)
+# 输出最好的n_estimators
+print(max(score_n_estimators), (score_n_estimators.index(max(score_n_estimators))*10)+1)
+plt.figure(figsize=[20, 5])
+plt.plot(range(1, 201, 10), score_n_estimators)
+plt.show()
+"""
+
+# 第二步
+"""
+score_n_estimators = []
+for i in range(35, 45):
+    rfc = RandomForestClassifier(
+        n_estimators=i,
+        n_jobs=-1,
+        random_state=90
+    )
+    score = cross_val_score(rfc, data.data, data.target, cv=10).mean()
+    score_n_estimators.append(score)
+print(max(score_n_estimators), ([*range(35, 45)][score_n_estimators.index(max(score_n_estimators))]))
+plt.figure(figsize=[20, 5])
+plt.plot(range(35, 45), score_n_estimators)
+plt.show()
+"""
+
+# 第三步
+"""
+param_grid = {'max_depth': np.arange(1, 20, 1)}
+rfc = RandomForestClassifier(
+    n_estimators=39,
+    random_state=90
+)
+GS = GridSearchCV(rfc, param_grid=param_grid, cv=10)
+GS.fit(data.data, data.target)
+print(GS.best_params_)
+print(GS.best_score_)
+"""
+
+# 第四步
+"""
+param_grid = {'max_features': np.arange(5, 30, 1)}
+rfc = RandomForestClassifier(
+    n_estimators=39,
+    max_depth=11,
+    random_state=90
+)
+GS = GridSearchCV(rfc, param_grid=param_grid, cv=10)
+GS.fit(data.data, data.target)
+print(GS.best_params_)
+print(GS.best_score_)
+"""
+
+# 【1】
+"""
+# 最小值是+10，数据量和维度高时可以+50，具体看数据尺寸
+param_grid = {'min_samples_leaf': np.arange(1, 11, 1)}
+rfc = RandomForestClassifier(
+    n_estimators=39,
+    max_depth=11,
+    max_features=5,
+    random_state=90
+)
+GS = GridSearchCV(rfc, param_grid=param_grid, cv=10)
+GS.fit(data.data, data.target)
+print(GS.best_params_)
+print(GS.best_score_)
+"""
