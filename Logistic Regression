@@ -1,0 +1,89 @@
+"""
+实际是线性分类算法
+
+逻辑回归的优势：
+线性关系的拟合效果好
+逻辑回归计算快
+逻辑回归返回的分类结果是概率数字
+
+使用前先了解是不是线性关系
+
+逻辑分类评估：
+metrics.confusion_matrix                混淆矩阵
+metrics.roc_auc_score                   ROC曲线
+metrics.accuracy_score                  精确性
+"""
+
+"""
+sklearn.linear_model.LogisticRegression(penalty=’l2’, dual=False, tol=0.0001, C=1.0, fit_intercept=True, intercept_scaling=1, class_weight=None, random_state=None, solver=’warn’, max_iter=100, multi_class=’warn’, verbose=0, warm_start=False, n_jobs=None, l1_ratio=None)
+
+C越小，逻辑惩罚越大
+逻辑回归的损失函数：衡量“求出的参数”的优劣
+
+逻辑回归中对过拟合的解决：正则化 penalty
+正则化两种方式：L1和L2   
+L1：将相关性差的因子的参数直接变成0
+L2：将相关性差的因子的参数变为很小但不为0
+    推荐使用L2，但如果使用后仍然过拟合则使用L1
+    
+逻辑回归的重要属性coef_，查看回归函数中每个特征所对应的参数
+
+"""
+
+from sklearn.linear_model import LogisticRegression as LR
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import numpy as np
+import matplotlib.pyplot as plt
+
+data = load_breast_cancer()
+X = data.data
+y = data.target
+
+# print(data)
+print(data.data.shape)
+print(data.feature_names)
+print(data.target_names)
+
+lr_l1 = LR(penalty='l1', solver='liblinear', C=0.5, max_iter=1000)
+lr_l2 = LR(penalty='l2', solver='liblinear', C=0.5, max_iter=1000)
+
+# 显示回归方程的系数
+lr_l1 = lr_l1.fit(X, y)
+print(lr_l1.coef_)
+print((lr_l1.coef_ != 0).sum(axis=1))
+
+lr_l2 = lr_l2.fit(X, y)
+print(lr_l2.coef_)
+print((lr_l2.coef_ != 0).sum(axis=1))
+
+# 效果评价例子  寻求模型最优参数
+l1 = []
+l2 = []
+l1_test = []
+l2_test = []
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+
+# linspace中三个参数，起始点、终止点、取点数量
+for i in np.linspace(0.05, 1, 19):
+    lr_l1 = LR(penalty="l1", solver="liblinear", C=i, max_iter=1000)
+    lr_l2 = LR(penalty="l2", solver="liblinear", C=i, max_iter=1000)
+
+    lr_l1 = lr_l1.fit(X_train, y_train)
+    l1.append(accuracy_score(lr_l1.predict(X_train), y_train))
+    l1_test.append(accuracy_score(lr_l1.predict(X_test), y_test))
+
+    lr_l2 = lr_l2.fit(X_train, y_train)
+    l2.append(accuracy_score(lr_l2.predict(X_train),y_train))
+    l2_test.append(accuracy_score(lr_l2.predict(X_test), y_test))
+
+graph = [l1, l2, l1_test, l2_test]
+color = ["green", "red", "gray", "blue"]
+label = ["L1", "L2", "L1_TEST", "L2_TEST"]
+
+for i in range(len(graph)):
+    plt.plot(np.linspace(0.05, 1, 19), graph[i], color[i], label=label[i])
+plt.legend()
+plt.show()
