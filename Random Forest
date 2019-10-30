@@ -1,0 +1,133 @@
+"""
+随机森林--集成算法
+得到比单个模型更好的回归或分类表现
+
+bagging算法       随机森林
+boosting算法      梯度提升数
+
+sklearn中的集成算法都在 ensemble 里面
+
+建模代码：
+from sklearn.ensemble import RandomForestClassifier
+
+rfc = RandomForestClassifier()          #实例化
+rfc = rfc.fit(X_train, y_train)         #训练模型
+print(rfc.score(X_test, y_test))        #导入数据集，获取得分
+"""
+
+"""
+# RandomForestClassifier
+
+class sklearn.ensemble.RandomForestClassifier(n_estimators=’warn’, criterion=’gini’, max_depth=None, min_samples_split=2, min_samples_leaf=1, min_weight_fraction_leaf=0.0, max_features=’auto’, max_leaf_nodes=None, min_impurity_decrease=0.0, min_impurity_split=None, bootstrap=True, oob_score=False, n_jobs=None, random_state=None, verbose=0, warm_start=False, class_weight=None)
+
+重要参数：
+大多参数和决策树是一样的
+
+n_estimators    越大模型的效果越好！但消耗内存和计算量，时间也会越长（有该参数就已经可以建模）
+n_jobs          用于拟合和预测的并行运行的工作数量，值为-1时，工作数量被设置为核的数量
+"""
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="sklearn", lineno=245)
+
+# 导入两个训练模块是为了做对比
+
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import load_wine
+
+wine = load_wine()
+print(wine)
+print(wine.data)
+print(type (wine.data))
+print(wine.target)
+print(type (wine.target))
+print(wine.feature_names)
+print(type (wine.feature_names))
+
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+
+X_train, X_test, y_train, y_test = train_test_split(wine.data, wine.target, test_size=0.3)
+
+rfc = RandomForestClassifier(random_state=0)
+clf = DecisionTreeClassifier(random_state=0)
+rfc = rfc.fit(X_train, y_train)
+clf = clf.fit(X_train, y_train)
+
+score_clf = clf.score(X_test, y_test)
+score_rfc = rfc.score(X_test, y_test)
+
+print("Single Tree:{}".format(score_clf), "Random Tree:{}".format(score_rfc))
+
+
+"""
+# 将随机森林和决策树画出来
+# cross_val_score是进行交叉验证（后期学习）
+"""
+from sklearn.model_selection import cross_val_score
+
+rfc = RandomForestClassifier(n_estimators=25)
+rfc_s = cross_val_score(rfc, wine.data, wine.target, cv = 10)
+
+clf = DecisionTreeClassifier()
+clf_s = cross_val_score(clf, wine.data, wine.target, cv = 10)
+
+plt.plot(range(1, 11), rfc_s, label = "Random Forest")
+plt.plot(range(1, 11), clf_s, label = "Decision Tree")
+plt.legend()
+plt.show()
+
+
+"""
+循环10次，每次进行10组交叉验证
+"""
+rfc_data = []
+clf_data = []
+for i in range(10):
+    rfc = RandomForestClassifier(n_estimators=25)
+    rfc_s = cross_val_score(rfc, wine.data, wine.target, cv=10).mean()
+    rfc_data.append(rfc_s)
+
+    clf = DecisionTreeClassifier()
+    clf_s = cross_val_score(clf, wine.data, wine.target, cv=10).mean()
+    clf_data.append(clf_s)
+
+plt.plot(range(1, 11), rfc_data, label="Random Forest")
+plt.plot(range(1, 11), clf_data, label="Decision Tree")
+plt.legend()
+plt.show()
+
+
+"""
+# n_estimators学习曲线，会很耗时但可以试试
+n_estimators_data = []
+for i in range(20):
+    rfc = RandomForestClassifier(n_estimators=i+1, n_jobs=-1)
+    rfc_s = cross_val_score(rfc, wine.data, wine.target, cv=10).mean()
+    n_estimators_data.append(rfc_s)
+print(max(n_estimators_data), n_estimators_data.index(max(n_estimators_data)))
+# plt.figure(figsize=[20, 5])
+plt.plot(range(1, 21), n_estimators_data)
+plt.show()
+"""
+
+
+"""
+重要属性：
+.estimators_            返回建好的森林的列表
+.oob_score_             带外得分，sklearn可以用来测试模型，相当于得到精确度
+.feature_importances_
+
+接口：
+和决策树完全一致，fit/score/apply/predict ||| 还有一个predict_proba接口
+predict_proba   每个测试集样本对应的每一类标签的概率
+"""
+rfc = RandomForestClassifier(n_estimators=25)
+rfc = rfc.fit(X_train, y_train)
+print(rfc.score(X_test, y_test))
+
+print(*zip(wine.feature_names, rfc.feature_importances_))
+print(rfc.predict_proba(X_test))
+
+
+
