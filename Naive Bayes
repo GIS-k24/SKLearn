@@ -1,0 +1,43 @@
+"""
+朴素贝叶斯：衡量标签和特征之间的概率关系的有监督算法，可以回归也可分类
+            假设所有的特征之间是独立的       因此如果特征间的关系强，表现就不好
+朴素贝叶斯是 有监督、不建模 的算法
+
+真正的概率分类器
+决策树：predict_proba
+逻辑回归：predict_proba
+SVM：decision_function
+都可以通过归一化或sigmoid函数将这些指标压缩到0-1之间，表示模型对预测的结果的把握
+
+常用的两种贝叶斯函数
+sklearn.naive_bayes.BernoulliNB(alpha=1.0, binarize=0.0, fit_prior=True, class_prior=None)
+
+sklearn.naive_bayes.GaussianNB(priors=None, var_smoothing=1e-09)
+"""
+
+import matplotlib.pyplot as plt
+from sklearn.naive_bayes import GaussianNB
+from sklearn.datasets import load_digits
+from sklearn.model_selection import train_test_split
+
+digits = load_digits()
+X, y = digits.data, digits.target
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=420)
+
+gnb = GaussianNB().fit(X_train, y_train)
+
+acc_score = gnb.score(X_test, y_test)
+print(acc_score)
+
+y_pred = gnb.predict(X_test)
+print(y_pred)
+
+prob = gnb.predict_proba(X_test)
+print(prob)
+
+print(prob.shape)                           # 每个样本在每个标签下的概率
+
+# 使用混淆矩阵查看结果
+from sklearn.metrics import confusion_matrix as CM
+print(CM(y_test, y_pred))
