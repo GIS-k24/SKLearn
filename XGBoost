@@ -1,0 +1,339 @@
+"""
+XGBoost內库 和 sklearn.API 中都有内容，本节首先学习 sklearn.API，然后再学习 XGBoost內库
+案例：梯度提升回归树      重在提升，因此后一次计算是基于前一次计算
+
+XGBoost內库   数据的使用方式不同:
+读取数据：xgboost.DMatrix()
+设置参数：param = {}
+训练模型：bst = xgboost.train(param)
+预测结果：bst.predict()
+
+sklearn.API:        xgboost 既可作分类也可做回归
+
+xgboost.XGBRegressor(base_score=0.5, booster='gbtree', colsample_bylevel=1, colsample_bytree=1, gamma=0, learning_rate=0.1, max_delta_step=0, max_depth=3, min_child_weight=1, missing=None, n_estimators=100, n_jobs=1, nthread=None, objective='reg:linear', random_state=42, reg_alpha=0, reg_lambda=1, scale_pos_weight=1, seed=None, silent=True, subsample=1)
+
+重点是集成算法和弱评估器--进行调参
+XGBoost中所有的树都是二叉树
+
+参数：
+1、建树的数量 *
+    sklearn.API         n_estimators(default=100)
+    XGBoost內库         num_round(default=10)     数量太少了，需要自己修改
+2、每迭代一次是否打印
+    sklearn.API         slient(default=True)
+    XGBoost內库         slient(default=False)
+3、随机抽样中抽取的样本比例，范围（0, 1】 *
+    sklearn.API         subsample(default=1)
+    XGBoost內库         subsample(default=1)
+4、控制迭代速率，常用于防止过拟合，范围【0, 1】 *    通常eta是用来调整时间的
+    sklearn.API         learning_rate(default=0.1)
+    XGBoost內库         eta(default=0.3)
+
+XGBoost 仍然是一种回归树，作为树状结构必然还有修剪枝的处理等等，因此对于 XGBoost 的参数处理，还有和“树处理”一样的模式
+"""
+
+from xgboost import XGBRegressor as XGBR
+from sklearn.ensemble import RandomForestRegressor as RFR
+from sklearn.linear_model import LinearRegression as LinearR
+from sklearn.datasets import load_boston
+from sklearn.model_selection import KFold, cross_val_score as CVS, train_test_split as TTS
+from sklearn.metrics import mean_squared_error as MSE
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from time import time
+import datetime
+
+data = load_boston()
+X = data.data
+y = data.target
+
+X_train, X_test, y_train, y_test = TTS(X, y, test_size=0.3, random_state=420)
+
+reg = XGBR(n_estimators=100).fit(X_train, y_train)
+print(reg.predict(X_test))
+print(reg.score(X_test, y_test))
+print(MSE(y_test, reg.predict(X_test)))
+print(reg.feature_importances_)  # 树模型的优势之一，查看模型的重要性分数，进行特征选择
+print(*zip(data.feature_names, reg.feature_importances_))
+
+print("---------------------------------------------------------------------------------------------")
+
+# 进行交叉验证，比较 线性回归、XGBoost 和 随机森林
+
+# XGBoost
+reg = XGBR(n_estimators=100)
+print(CVS(reg, X_train, y_train, cv=5).mean())  # CVS 得到的数据的均值等同于 score
+# 交叉验证中使用“训练数据”才是最严谨的交叉验证
+
+print(CVS(reg, X_train, y_train, cv=5, scoring='neg_mean_squared_error').mean())
+
+# 随机森林
+rfr = RFR(n_estimators=100)
+print(CVS(rfr, X_train, y_train, cv=5).mean())
+
+print(CVS(rfr, X_train, y_train, cv=5, scoring='neg_mean_squared_error').mean())
+
+# 线性回归
+lr = LinearR()
+print(CVS(lr, X_train, y_train, cv=5).mean())
+
+print(CVS(lr, X_train, y_train, cv=5, scoring='neg_mean_squared_error').mean())
+
+# 绘制学习曲线
+from sklearn.model_selection import learning_curve
+
+def plot_learning_curve(estimator, title, X, y, ax=None, ylim=None, cv=None, n_jobs=None):
+    train_sizes, train_scores, test_scores = learning_curve(
+        estimator, X, y, shuffle=True, cv=cv, n_jobs=n_jobs, random_state=420
+    )
+
+    if ax == None:
+        ax = plt.gca()
+    else:
+        ax = plt.figure()
+    ax.set_title(title)
+    if ylim is not None:
+        ax.set_ylim(*ylim)
+
+    ax.set_xlabel("Training examples")
+    ax.set_ylabel("Score")
+    ax.grid()
+    ax.plot(train_sizes, np.mean(train_scores, axis=1), 'o--', color='r', label="Training Score")
+    ax.plot(train_sizes, np.mean(test_scores, axis=1), 'o--', color='g', label="Test Score")
+    ax.legend(loc='best')
+    return ax
+
+cv = KFold(n_splits=5, shuffle=True, random_state=42)
+plot_learning_curve(
+    XGBR(n_estimators=100, random_state=420),
+    'XGB',
+    X_train,
+    y_train,
+    ax=None,
+    cv=cv
+)
+plt.show()
+
+"""
+根据图像中的情况，明显函数容易过拟合，因此进行参数调整
+"""
+
+# 1、n_estimators
+
+"""
+axisx = range(10, 1010, 50)
+
+rs = []
+
+for i in axisx:
+    reg = XGBR(
+        n_estimators=i,
+        random_state=420,
+    )
+    rs.append(CVS(reg, X_train, y_train, cv=cv).mean())
+
+print(axisx[rs.index(max(rs))], max(rs))
+
+plt.plot(axisx, rs, c='red', label='XGB')
+plt.legend()
+plt.show()
+"""
+
+# 对n_estimators进行调整时，根据输出结果知建树数量大于样本数量，因此评价方式可能是有问题的，进行调整
+
+"""
+axisx = range(10, 1010, 50)
+
+rs = []
+var = []
+ge = []
+
+for i in axisx:
+    reg = XGBR(n_estimators=i, random_state=420)
+    curesult = CVS(reg, X_train, y_train, cv=cv)
+    rs.append(curesult.mean())                               # 记录偏差
+    var.append(curesult.var())                               # 记录方差
+    ge.append((1 - curesult.mean())**2 + curesult.var())     # 记录泛化误差可控部分
+
+print(axisx[rs.index(max(rs))], max(rs), var[rs.index(max(rs))])
+print(axisx[var.index(min(var))], min(var), rs[var.index(min(var))])
+print(axisx[ge.index(min(ge))], min(ge), rs[ge.index(min(ge))], var[ge.index(min(ge))])
+
+plt.figure(figsize=(20, 5))
+plt.plot(axisx, rs, c="red", label='XGB')
+plt.legend()
+plt.show()
+"""
+
+# 根据结果可知，使用泛化误差进行评估效果是最好的
+
+# 2、参数n_estimators的细化
+axisx = range(100, 300, 10)
+
+rs = []
+var = []
+ge = []
+
+for i in axisx:
+    reg = XGBR(n_estimators=i, random_state=420)
+    curesult = CVS(reg, X_train, y_train, cv=cv)
+    rs.append(curesult.mean())  # 记录偏差
+    var.append(curesult.var())  # 记录方差
+    ge.append((1 - curesult.mean()) ** 2 + curesult.var())  # 记录泛化误差可控部分
+
+print(axisx[rs.index(max(rs))], max(rs), var[rs.index(max(rs))])
+print(axisx[var.index(min(var))], min(var), rs[var.index(min(var))])
+print(axisx[ge.index(min(ge))], min(ge), rs[ge.index(min(ge))], var[ge.index(min(ge))])
+
+rs = np.array(rs)
+var = np.array(var) * 0.01
+
+plt.figure(figsize=(20, 5))
+plt.plot(axisx, rs, c="blue", label='XGB')
+# 添加方差线
+plt.plot(axisx, rs + var, c="red", label='--')
+plt.plot(axisx, rs - var, c="red", label='-')
+plt.legend()
+plt.show()
+
+# 评估
+time0 = time()
+print(XGBR(n_estimators=100, random_state=420).fit(X_train, y_train).score(X_test, y_test))
+time1 = time()
+print(time1 - time0)
+
+time0 = time()
+print(XGBR(n_estimators=660, random_state=420).fit(X_train, y_train).score(X_test, y_test))
+time1 = time()
+print(time1 - time0)
+
+time0 = time()
+print(XGBR(n_estimators=180, random_state=420).fit(X_train, y_train).score(X_test, y_test))
+time1 = time()
+print(time1 - time0)
+
+# 3、subsample
+"""
+axisx = np.linspace(0, 1, 20)
+rs = []
+
+for i in axisx:
+    reg = XGBR(n_estimators=180, subsample=i, random_state=420)
+    rs.append(CVS(reg, X_train, y_train, cv=cv).mean())
+
+print(axisx[rs.index(max(rs))], max(rs))
+plt.figure(figsize=(20, 5))
+plt.plot(axisx, rs, c="green", label='XGB')
+plt.legend()
+plt.show()
+"""
+
+# 4、参数subsample的细化
+"""
+axisx = np.linspace(0.05, 1, 20)
+rs = []
+var = []
+ge = []
+
+for i in axisx:
+    reg = XGBR(n_estimators=180, subsample=i, random_state=420)
+    cvresult = CVS(reg, X_train, y_train, cv=cv)
+    rs.append(cvresult.mean())
+    var.append(cvresult.var())
+    ge.append((1 - cvresult.mean())**2 + cvresult.var())
+
+print(axisx[rs.index(max(rs))], max(rs), var[rs.index(max(rs))])
+print(axisx[var.index(min(var))], min(var), rs[var.index(min(var))])
+print(axisx[ge.index(min(ge))], min(ge), rs[ge.index(min(ge))], var[ge.index(min(ge))])
+
+rs = np.array(rs)
+var = np.array(var)
+
+plt.figure(figsize=(20, 5))
+plt.plot(axisx, rs, c="green", label='XGB')
+plt.plot(axisx, rs + var, c="red", label='--')
+plt.plot(axisx, rs - var, c="red", label='-')
+plt.legend()
+plt.show()
+"""
+
+# 5、参数subsample再次细化
+axisx = np.linspace(0.75, 1, 25)
+rs = []
+var = []
+ge = []
+
+for i in axisx:
+    reg = XGBR(n_estimators=180, subsample=i, random_state=420)
+    cvresult = CVS(reg, X_train, y_train, cv=cv)
+    rs.append(cvresult.mean())
+    var.append(cvresult.var())
+    ge.append((1 - cvresult.mean()) ** 2 + curesult.var())
+
+print(axisx[rs.index(max(rs))], max(rs), var[rs.index(max(rs))])
+print(axisx[var.index(min(var))], min(var), rs[var.index(min(var))])
+print(axisx[ge.index(min(ge))], min(ge), rs[ge.index(min(ge))], var[ge.index(min(ge))])
+
+rs = np.array(rs)
+var = np.array(var)
+
+plt.figure(figsize=(20, 5))
+plt.plot(axisx, rs, c="green", label='XGB')
+plt.plot(axisx, rs + var, c="red", label='--')
+plt.plot(axisx, rs - var, c="red", label='-')
+plt.legend()
+plt.show()
+
+# 评估
+reg = XGBR(n_estimators=180, subsample=0.937, random_state=420).fit(X_train, y_train)
+print(reg.score(X_test, y_test))
+print(MSE(y_test, reg.predict(X_test)))
+
+# 从输出的结果我们看到，得分值反而不如未进行subsample处理的好。原因在于数据量太少，进行subsample处理反而更加减少了训练数据量
+
+# 探索参数 eta 的性质
+
+reg = XGBR(n_estimators=180, random_state=420)
+
+
+# 定义一个评分函数
+def regassess(reg, X_train, y_train, cv, scoring=["r2"], show=True):
+    score = []
+    for i in range(len(scoring)):
+        if show:
+            print("{}:{:.2f}".format(scoring[i],
+                                     CVS(reg, X_train, y_train, cv=cv, scoring=scoring[i]).mean()))
+        score.append(CVS(reg, X_train, y_train, cv=cv, scoring=scoring[i]).mean())
+    return score
+
+
+regassess(reg, X_train, y_train, cv, scoring=["r2", "neg_mean_squared_error"])
+
+for i in [0, 0.2, 0.5, 1]:
+    time0 = time()
+    reg = XGBR(n_estimators=180, random_state=420, learning_rate=i)
+    print("learning_rate = {}".format(i))
+    regassess(reg, X_train, y_train, cv, scoring=["r2", "neg_mean_squared_error"])
+    time1 = time()
+    print(time1 - time0)
+    print("\t")
+
+# 细化eta参数
+axisx = np.arange(0.05, 1, 0.05)
+rs = []
+te = []
+
+for i in axisx:
+    reg = XGBR(n_estimators=180, random_state=420, learning_rate=i)
+    score = regassess(reg, X_train, y_train, cv=cv, scoring=["r2", "neg_mean_squared_error"], show=False)
+    test = reg.fit(X_train, y_train).score(X_test, y_test)
+    rs.append(score[0])
+    te.append(test)
+
+print(axisx[rs.index(max(rs))], max(rs))
+plt.figure(figsize=(20, 5))
+plt.plot(axisx, te, c="red", label="score")
+plt.plot(axisx, rs, c="blue", label="test")
+plt.legend()
+plt.show()
