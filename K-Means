@@ -1,0 +1,145 @@
+"""
+无监督学习：
+只需要data，不需要target
+
+分类和聚类在输出上的区别是：
+分类--结果是确定的
+聚类--结果是不确定的
+
+聚类算法（cluster）：
+
+sklearn.cluster.KMeans(n_clusters=8, init=’k-means++’, n_init=10, max_iter=300, tol=0.0001, precompute_distances=’auto’, verbose=0, random_state=None, copy_x=True, n_jobs=None, algorithm=’auto’)
+
+关键概念：簇  质心
+KMeans分出来的簇是没有交集的
+质心：每个簇的均值
+实际的目的是：根据质心打包成簇
+
+KMeans执行思维顺序：
+1、随机抽取K个样本作为最初的质心
+2、开始循环--根据样本点生成K个质心
+             再迭代根据当前样本点的平均值做新的质心
+3、当质心的位置不再变化时，迭代停止，聚类完成
+
+重要参数：
+n_clusters：告诉模型分几类
+
+KMeans代码执行顺序：
+1、先对原始图层可视化
+2、进行聚类
+3、迭代得到最好的聚类数量
+"""
+
+# make_blobs数据集即创建随机点
+from sklearn.datasets import make_blobs
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+
+# 自己创建数据集       random_state是明显的影响因子
+X, y = make_blobs(
+    n_samples=500,
+    n_features=2,
+    centers=4,
+    random_state=1
+)
+print(X)                    # X相当于 data
+print(y)                    # y相当于 target
+
+# subplots表示建立子图，参数是子图个数
+# fig是画布，ax1是子图对象
+"""
+fig, ax1 = plt.subplots(1)
+ax1.scatter(X[:, 0], X[:, 1], marker="o", s=8)
+plt.show()
+"""
+
+
+# 聚类代码1
+n_clusters = 3
+cluster = KMeans(n_clusters=n_clusters, random_state=0).fit(X)
+
+# 重要属性labels_，查看聚好的类别，每个样本所对应的类
+y_pred = cluster.labels_
+print(y_pred)
+
+# 属性cluster_centers_，查看质心
+centroid = cluster.cluster_centers_
+print(centroid)
+
+# 属性inertia_，查看总距离平方和           越小越好
+inertai = cluster.inertia_
+print(inertai)
+
+# 画图
+color = ["red", "pink", "purple", "blue"]
+fig, ax1 = plt.subplots(1)
+
+# 离散点
+for i in range(n_clusters):
+    ax1.scatter(X[y_pred == i, 0], X[y_pred == i, 1], marker="o", s=8, c=color[i])
+
+# 质心
+ax1.scatter(centroid[:, 0], centroid[:, 1], marker="x", s=15, c="black")
+plt.show()
+
+# 设置 n_clusters = 4，查看质心变化
+# 聚类代码2
+n_clusters = 4
+cluster = KMeans(n_clusters=n_clusters, random_state=0).fit(X)
+
+# 重要属性labels_，查看聚好的类别，每个样本所对应的类
+y_pred = cluster.labels_
+print(y_pred)
+
+# 属性cluster_centers_，查看质心
+centroid = cluster.cluster_centers_
+print(centroid)
+
+# 属性inertia_，查看总距离平方和           越小越好
+inertai = cluster.inertia_
+print(inertai)
+
+# 画图
+color = ["red", "pink", "purple", "blue"]
+fig, ax1 = plt.subplots(1)
+
+# 离散点
+for i in range(n_clusters):
+    ax1.scatter(X[y_pred == i, 0], X[y_pred == i, 1], marker="o", s=8, c=color[i])
+
+# 质心
+ax1.scatter(centroid[:, 0], centroid[:, 1], marker="x", s=15, c="black")
+plt.show()
+
+# 制作 n_clusters 和 inertai 散点图
+inertai_data = []
+for i in range(1, 8):
+    cluster = KMeans(n_clusters=i, random_state=0).fit(X)
+    inertai = cluster.inertia_
+    inertai_data.append(inertai/100)
+
+plt.plot(inertai_data)
+plt.show()
+
+"""
+聚类算法模型评估指标：衡量簇内外差异来衡量效果
+
+当真实标签未知的时候，轮廓系数（silhouette_score）做衡量指标
+轮廓系数均值 越高效果越好
+"""
+from sklearn.metrics import silhouette_score            # 这是均值
+from sklearn.metrics import silhouette_samples          # 这是每个单值
+
+print(silhouette_samples(X, y_pred))
+
+silhouette_score_data = []
+for i in range(2, 7):
+    cluster = KMeans(n_clusters=i, random_state=0).fit(X)
+    y_pred = cluster.labels_
+    silhouette_score_data.append(silhouette_score(X, y_pred))
+
+plt.scatter(range(2, 7), silhouette_score_data)
+plt.show()
+
+
+
