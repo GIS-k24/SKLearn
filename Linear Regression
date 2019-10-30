@@ -1,0 +1,102 @@
+"""
+线性回归
+
+sklearn.linear_model.LinearRegression(fit_intercept=True, normalize=False, copy_X=True, n_jobs=None)
+
+参数：
+fit_intercept：是否计算此模型的截距            通常都要计算截距
+normalize：进行标准化，可以节省时间           数据标准化和归一化对线性回归影响不大
+copy_X：保证原有的特征矩阵不被覆盖
+n_jobs：电脑给多少CPU进行计算                 -1则表示给全部CPU计算，数据量很大时才进行调整
+
+# 线性回归的算法内置比较完全，因此参数调整很少
+"""
+
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
+from sklearn.datasets import fetch_california_housing as fch
+import pandas as pd
+# 设置pandas的输出效果
+pd.set_option('display.max_columns', 1000)
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_colwidth', 1000)
+pd.set_option('display.width', 1000)
+
+housevalue = fch()
+
+X = pd.DataFrame(housevalue.data)
+y = housevalue.target
+# print(X)
+# print(y)
+print(housevalue.feature_names)
+print(X.shape)
+
+"""
+MedInc：住户的收入中位数
+HouseAge：房屋使用年代的中位数
+AveRooms：平均的房间数目
+AveBedrms：平均的卧室数目
+Population：人口
+AveOccup：平均入住率
+Latitude：纬度
+Longitude：经度
+"""
+feature_names = ['MedInc', 'HouseAge', 'AveRooms', 'AveBedrms', 'Population', 'AveOccup', 'Latitude', 'Longitude']
+X.columns = feature_names
+# print(X)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=420)
+# 由于 train_test_split 是随机的，输出的索引会被打乱，因此需要进行恢复
+
+# 恢复索引
+for i in [X_train, X_test]:
+    i.index = range(i.shape[0])
+
+reg = LinearRegression().fit(X_train, y_train)
+yhat = reg.predict(X_test)
+print(yhat)
+
+print(reg.coef_)                                    # coef_ 各项系数
+
+print(*zip(X_train.columns, reg.coef_))             # 系数和各项对应
+
+print(reg.intercept_)                               # 查看截距
+
+"""
+从打分情况看，预测的效果不是特别好
+
+衡量预测值和真实值的差异，使用均方误差（MSE）
+"""
+from sklearn.metrics import mean_squared_error as MSE
+print(MSE(yhat, y_test))
+
+print(y.max(), y.min())
+
+# 使用交叉验证        cross_val_score 自带训练，因此无需进行训练集和测试集的分配
+print(cross_val_score(reg, X, y, cv=10, scoring="neg_mean_squared_error").mean())
+"""
+查看 cross_val_score 中 scoring 的种类
+import sklearn
+print(sorted(sklearn.metrics.SCORERS.keys()))
+"""
+
+# 一号坑：在 sklearn 中，所有带有损失含义的数都用负数表示，因此 真正的MSE 是去掉“负号”的结果
+
+# 衡量模型没有捕捉到的信息量占真实标签中所带的信息量的比例
+# 方式一
+from sklearn.metrics import r2_score
+print(r2_score(y_test, yhat))
+# 方式二
+print(reg.score(X_test, y_test))
+
+# 二号坑：两衡量指标的差距很大 原因：r2_score中一号参数是真实值，二号参数是预测值，顺序很重要
+
+# 将两组数据可视化一下，查看拟合情况
+import matplotlib.pyplot as plt
+
+# print(sorted(y_test))
+plt.plot(range(len(y_test)), sorted(y_test), c="black", label='Data')
+plt.plot(range(len(yhat)), sorted(yhat), c="red", label='Predict')
+plt.legend()
+plt.show()
