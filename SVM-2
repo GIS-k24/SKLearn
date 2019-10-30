@@ -1,0 +1,193 @@
+"""
+核技巧：用一个低维函数函数代替高维函数中的结果
+
+重点参数：
+kernel：
+    linear：核线性       解决线性               其次
+    poly：多项式核       解决偏线性
+    sigmoid：双曲正切核  解决非线性
+    rbf：高斯径向基      解决偏非线性           首推
+除了linear，其他都可以处理非线性问题
+degree:
+    多项式核函数的次数，如果核函数没选‘poly’，该参数被忽略
+gamma：
+    1 / features
+coef0:
+    核函数中的常数项，在 poly 和 sigmoid 时有效
+
+对于 rbf，只有参数 gamma 可以调整，画学习曲线处理
+
+C：
+    对 linear 和 rbf 都会产生影响的参数    因此画学习曲线观察效果
+"""
+
+"""
+由于关于核函数的案例很少，因此选择一个个的尝试来评价哪种更适合
+"""
+
+from sklearn.decomposition import PCA
+from sklearn.datasets import load_breast_cancer
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+import numpy as np
+from time import time
+import datetime
+
+data = load_breast_cancer()
+X = data.data
+y = data.target
+
+# print(X.shape)
+
+# 输出唯一值
+# print(np.unique(y))
+
+# 将数据可视化，只是挑选两个特征查看
+# plt.scatter(X[:, 0], X[:, 1], c=y)
+# plt.show()
+
+# 尝试用 PCA 降维--降至二维画图
+"""
+X_dr = PCA(n_components=2).fit_transform(X)
+plt.scatter(X_dr[:, 0], X_dr[:, 1], c=y)
+plt.show()
+"""
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+kernel = ["linear", "sigmoid", "rbf"]
+for i in range(len(kernel)):
+    time0 = time()
+    clf = SVC(
+        kernel=kernel[i],
+        gamma="auto",
+        cache_size=5000                     # cache_size 是电脑给多少内存进行运算
+    ).fit(X_train, y_train)
+    print("The accuracy under kernel %s is %f" % (kernel[i], clf.score(X_test, y_test)))
+    time1 = time()
+    print("%s spends for %f" % (kernel[i], time1-time0))
+
+print("------------------------------------------")
+
+kernel = ["linear", "poly", "sigmoid", "rbf"]
+for i in range(len(kernel)):
+    time0 = time()
+    clf = SVC(
+        kernel=kernel[i],
+        gamma="auto",
+        cache_size=5000,                     # cache_size 是电脑给多少内存进行运算
+        degree=1                             # degree=1 是执行线性命令
+    ).fit(X_train, y_train)
+    time1 = time()
+    print("The accuracy under kernel %s is %f" % (kernel[i], clf.score(X_test, y_test)))
+    print("%s spends for %f" % (kernel[i], time1-time0))
+
+"""
+根据结果可以得出，线性效果是最好的
+但是理论上 rbf 的效果应该是可以适应大部分的数据的，那么就需要探究其原因
+"""
+# 首先查看数据
+import pandas as pd
+# 设置pandas的输出效果
+pd.set_option('display.max_columns', 1000)
+pd.set_option('display.max_rows', 1000)
+pd.set_option('display.max_colwidth', 1000)
+pd.set_option('display.width', 1000)
+
+data = pd.DataFrame(X)
+# pandas中的描述性统计
+print(data.describe([0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99]).T)
+
+"""
+根据统计的描述，我们可知：
+1、数据的量纲不统一
+2、查看数据分布，观察 99% 和 max 之间的差异，如果差距很大，说明数据急性右偏
+                 观察 1%  和 max 之间的差异，如果差距很大，说明数据急性左偏
+"""
+
+# 因此对数据进行压缩，使其标准化
+from sklearn.preprocessing import StandardScaler
+X = StandardScaler().fit_transform(X)
+data = pd.DataFrame(X)
+print(data.describe([0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99]).T)
+
+# 数据处理后再到SVC中运行
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+kernel = ["linear", "poly", "sigmoid", "rbf"]
+for i in range(len(kernel)):
+    time0 = time()
+    clf = SVC(
+        kernel=kernel[i],
+        degree=1,
+        cache_size=5000,
+        gamma="auto"
+    ).fit(X_train, y_train)
+    time1 = time()
+    print("The accuracy under kernel %s is %f" % (kernel[i], clf.score(X_test, y_test)))
+    print("%s spends for %f" % (kernel[i], time1-time0))
+
+# gamma参数调节
+score = []
+# 形成“自然对数”的数据集  范围可以自己调试
+gamma_range = np.logspace(-10, 1, 50)
+for i in gamma_range:
+    clf = SVC(
+        kernel='rbf',
+        gamma=i,
+        cache_size=5000
+    ).fit(X_train, y_train)
+    score.append(clf.score(X_test, y_test))
+
+print(max(score), gamma_range[score.index(max(score))])
+plt.plot(gamma_range, score)
+plt.show()
+
+# 如果使用 poly，调整的参数就有 gamma degree coef0，共同作用则使用网格搜索
+from sklearn.model_selection import StratifiedShuffleSplit      # 定义交叉验证的模式
+from sklearn.model_selection import GridSearchCV                # 带交叉验证的网格搜索
+
+time0 = time()
+
+gamma_range = np.logspace(-10, 1, 20)
+coef0_range = np.linspace(0, 5, 10)
+param_grid = dict(gamma=gamma_range, coef0=coef0_range)
+# StratifiedShuffleSplit    n_splits--表示分五组
+cv = StratifiedShuffleSplit(n_splits=5, test_size=0.3, random_state=0)      # 生成一种交叉验证的模式
+grid = GridSearchCV(
+    SVC(kernel='poly', degree=1, cache_size=5000),      # 首先设置 degree 是为了得到 gamma 和 coef0
+    param_grid=param_grid,
+    cv=cv
+).fit(X, y)
+time1 = time()
+print("The best parameters are %s with a score of %0.5f" % (grid.best_params_, grid.best_score_))
+print("It spends %f" % (time1-time0))
+
+# 参数C--对linear
+score = []
+C_range = np.linspace(0.01, 30, 50)
+for i in C_range:
+    clf = SVC(kernel="linear", C=i, cache_size=5000).fit(X_train, y_train)
+    score.append(clf.score(X_test, y_test))
+print(max(score), C_range[score.index(max(score))])
+plt.plot(C_range, score)
+plt.show()
+
+# 参数C--对rbf
+score = []
+C_range = np.linspace(0.01, 30, 50)
+for i in C_range:
+    clf = SVC(kernel="rbf", C=i, cache_size=5000, gamma=0.04832930238571752).fit(X_train, y_train)
+    score.append(clf.score(X_test, y_test))
+print(max(score), C_range[score.index(max(score))])
+plt.plot(C_range, score)
+plt.show()
+
+# 参数C--对rbf，细化参数
+score = []
+C_range = np.linspace(4, 7, 50)
+for i in C_range:
+    clf = SVC(kernel="rbf", C=i, cache_size=5000, gamma=0.04832930238571752).fit(X_train, y_train)
+    score.append(clf.score(X_test, y_test))
+print(max(score), C_range[score.index(max(score))])
+plt.plot(C_range, score)
+plt.show()
